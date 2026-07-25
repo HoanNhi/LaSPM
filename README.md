@@ -38,7 +38,7 @@ v 5 1
 
 ## Usage
 
-First, download the [dataset from Google Drive](https://drive.google.com/open?id=1aqsBOCUBf5Hkln8UeVt3mKpjDeGc3jxr&usp=drive_fs).
+First, download the [datasets from Google Drive](https://drive.google.com/open?id=1aqsBOCUBf5Hkln8UeVt3mKpjDeGc3jxr&usp=drive_fs).
 Then, place the downloaded files in the `data/` folder.
 
 ### LaSPM
