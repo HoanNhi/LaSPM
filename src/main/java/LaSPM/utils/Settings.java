@@ -9,21 +9,22 @@ import java.util.Map;
 import java.util.Properties;
 
 public class Settings {
-    public static String dataFolder;
-    public static String dataFile;
-    public static String outputFolder;
-    public static int numReruns;
-    public static boolean ablation;
+    public static String dataFolder = "dataExperiment/plmsc/";
+    public static String dataFile = "testSmallData2";
+    public static String outputFolder = "output/";
+    public static int numReruns = 4;
+    public static boolean ablation = true;
     public static String ablationMode;
     public static boolean allMatches = false;
-    public static int minDim;
-    public static int maxSize;
-    public static int minFreq;
+    public static int minDim = 0;
+    public static int maxSize = -1;
+    public static int minFreq = 1;
     public static long timeout;
     public static boolean disable_localNeighborhood = false;
     public static boolean disable_dimensionAware = false;
     public static boolean disable_decomposition = false;
     public static boolean disable_isomorphism = false;
+    public static boolean disable_multiset = false;
     public static boolean disable_sorting = false;
     public static boolean limited = true;
     // whether you want to write on disk the image sets
@@ -32,9 +33,9 @@ public class Settings {
             new LinkedHashMap<>();
 
     /**
-     * Overrides ablation settings from a Java properties file. Omitted keys
-     * retain their current values, so command-line runs without a config file
-     * continue to use the defaults above.
+     * Overrides batch and ablation settings from a Java properties file.
+     * Omitted keys retain their current values, so command-line runs without a
+     * config file continue to use the defaults above.
      */
     public static void loadOverrides(String configFile) throws IOException {
         Properties properties = loadProperties(configFile);
@@ -42,6 +43,16 @@ public class Settings {
             return;
         }
 
+        dataFolder = readFolder(properties, "dataFolder", dataFolder);
+        outputFolder = readFolder(properties, "outputFolder", outputFolder);
+        numReruns = readInteger(properties, "numReruns", numReruns);
+        minDim = readInteger(properties, "minDim", minDim);
+        maxSize = readInteger(properties, "maxSize", maxSize);
+        limited = readBoolean(properties, "limited", limited);
+        writeImageSet = readBoolean(
+                properties,
+                "writeImageSets",
+                readBoolean(properties, "writeImageSet", writeImageSet));
         ablation = readBoolean(properties, "ablation", ablation);
         disable_localNeighborhood = readBoolean(
                 properties,
@@ -59,12 +70,17 @@ public class Settings {
                 properties,
                 "disable_isomorphism",
                 disable_isomorphism);
+        disable_multiset = readBoolean(
+                properties,
+                "disable_multiset",
+                disable_multiset);
         disable_sorting = readBoolean(
                 properties,
                 "disable_sorting",
                 disable_sorting);
         loadBatchFrequencyOverrides(properties);
 
+        validateBatchSettings();
         validateAblationSettings();
     }
 
@@ -121,35 +137,45 @@ public class Settings {
 
     private static void loadBatchFrequencyOverrides(Properties properties) {
         batchFrequencyOverrides.clear();
-        for (String dataset : new String[]{"DBLP", "OpenAlex", "AMiner", "Walmart"}) {
-            String key = "batch." + dataset;
-            String value = properties.getProperty(key);
-            if (value == null) {
-                continue;
-            }
+        properties.stringPropertyNames().stream()
+                .filter(key -> key.startsWith("batch."))
+                .sorted()
+                .forEach(key -> {
+                    String dataset = key.substring("batch.".length()).trim();
+                    if (dataset.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                "A dataset name is required after 'batch.'.");
+                    }
+                    batchFrequencyOverrides.put(
+                            dataset,
+                            parseFrequencyThresholds(
+                                    key, properties.getProperty(key)));
+                });
+    }
 
-            String[] entries = value.split(",");
-            if (entries.length == 0) {
-                throw new IllegalArgumentException(
-                        "At least one threshold is required for '" + key + "'.");
-            }
-            int[] thresholds = new int[entries.length];
-            for (int index = 0; index < entries.length; index++) {
-                try {
-                    thresholds[index] = Integer.parseInt(entries[index].trim());
-                } catch (NumberFormatException exception) {
-                    throw new IllegalArgumentException(
-                            "Expected comma-separated integers for configuration key '"
-                                    + key + "'.",
-                            exception);
-                }
-                if (thresholds[index] <= 0) {
-                    throw new IllegalArgumentException(
-                            "Thresholds for '" + key + "' must be positive.");
-                }
-            }
-            batchFrequencyOverrides.put(dataset, thresholds);
+    private static int[] parseFrequencyThresholds(String key, String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "At least one threshold is required for '" + key + "'.");
         }
+
+        String[] entries = value.split(",", -1);
+        int[] thresholds = new int[entries.length];
+        for (int index = 0; index < entries.length; index++) {
+            try {
+                thresholds[index] = Integer.parseInt(entries[index].trim());
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException(
+                        "Expected comma-separated integers for configuration key '"
+                                + key + "'.",
+                        exception);
+            }
+            if (thresholds[index] <= 0) {
+                throw new IllegalArgumentException(
+                        "Thresholds for '" + key + "' must be positive.");
+            }
+        }
+        return thresholds;
     }
 
     private static String readString(
@@ -158,6 +184,21 @@ public class Settings {
             String fallback) {
         String value = properties.getProperty(key);
         return value == null ? fallback : value.trim();
+    }
+
+    private static String readFolder(
+            Properties properties,
+            String key,
+            String fallback) {
+        String folder = readString(properties, key, fallback);
+        if (folder == null || folder.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Configuration key '" + key + "' cannot be blank.");
+        }
+        if (folder.endsWith("/") || folder.endsWith("\\")) {
+            return folder;
+        }
+        return folder + "/";
     }
 
     private static int readInteger(
@@ -205,10 +246,26 @@ public class Settings {
         disabledHeuristics += disable_dimensionAware ? 1 : 0;
         disabledHeuristics += disable_decomposition ? 1 : 0;
         disabledHeuristics += disable_isomorphism ? 1 : 0;
+        disabledHeuristics += disable_multiset ? 1 : 0;
         disabledHeuristics += disable_sorting ? 1 : 0;
         if (disabledHeuristics > 1) {
             throw new IllegalArgumentException(
                     "An ablation run may disable at most one heuristic.");
+        }
+    }
+
+    private static void validateBatchSettings() {
+        if (dataFolder == null || dataFolder.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Configuration key 'dataFolder' cannot be blank.");
+        }
+        if (outputFolder == null || outputFolder.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Configuration key 'outputFolder' cannot be blank.");
+        }
+        if (numReruns <= 0) {
+            throw new IllegalArgumentException(
+                    "Configuration key 'numReruns' must be positive.");
         }
     }
 }

@@ -39,23 +39,28 @@ v 5 1
 ## Usage
 
 First, download the [dataset from Google Drive](https://drive.google.com/open?id=1aqsBOCUBf5Hkln8UeVt3mKpjDeGc3jxr&usp=drive_fs).
-Then, place the downloaded files in the `data/` folder.
+Then, place the downloaded files in the folder selected by `dataFolder` in
+`config/laspm.properties`. Each `batch.<name>` suffix must match a dataset
+filename in that folder.
 
 ### LaSPM
 To recreate the main result, runs:
 ```bash
 ./scripts/run_main_batch_with_memory.sh
 ```
-To run a single-heuristic ablation, set
-exactly one `disable_*` option to `true` and the other four to `false`; set
-all five options to `false` for the normal configuration. Then run:
+The batch runner loads `config/laspm.properties` by default. It controls the
+dataset folder, output folder, rerun count, mining bounds, batch frequency
+thresholds, and ablation switches. To run a single-heuristic ablation, set
+exactly one `disable_*` option to `true` and the other five to `false`; set
+all six options to `false` for the normal configuration. Then run:
 
 ```bash
-CONFIG_FILE=config/laspm.properties ./scripts/run_main_batch_with_memory.sh
+./scripts/run_main_batch_with_memory.sh
 ```
 
-The batch runner loads this file before creating the complex or miner and
-writes ablation results under `output/ablation/<mode>/`.
+Set `CONFIG_FILE` to use another properties file. The batch runner loads the
+selected file before creating the complex or miner and writes ablation results
+under `<outputFolder>/ablation/<mode>/`.
 
 To run a single dataset without editing Java settings,
 set `dataFolder`, `dataFile`, `outputFolder`, `minFreq`, `maxSize`, `limited`,

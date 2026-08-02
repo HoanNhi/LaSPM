@@ -164,6 +164,74 @@ public class Utils {
         return result;
     }
 
+    /**
+     * Generates every size-{@code k} subset of the supplied vertex multiset.
+     * Vertices with the same label are still distinct when their indices differ.
+     *
+     * <p>A {@link Map} cannot contain the same key more than once. Therefore the
+     * first subset having a particular label key uses the ordinary canonical key
+     * (for example, {@code "1 2"}), and subsequent subsets use {@code "#2"},
+     * {@code "#3"}, etc. (for example, {@code "1 2#2"}). The values contain the
+     * actual vertex indices, so no vertex-level subset is discarded.</p>
+     *
+     * @param vertices vertices from which to choose
+     * @param k number of vertices in each subset
+     * @return all vertex-level subsets in deterministic order
+     * @throws IllegalArgumentException if {@code k} is negative
+     */
+    public static Map<String, List<Integer>> generateAllSubsetMap(
+            Set<Vertex> vertices,
+            int k) {
+
+        if (k < 0)
+            throw new IllegalArgumentException("Subset size cannot be negative");
+
+        List<Vertex> sortedVertices = vertices.stream()
+                .sorted(Comparator.comparingInt(Vertex::getLabel)
+                        .thenComparingInt(Vertex::getIndex))
+                .collect(Collectors.toList());
+
+        Map<String, List<Integer>> result = new LinkedHashMap<>();
+        if (k > sortedVertices.size())
+            return result;
+
+        generateAllSubsets(sortedVertices, k, 0,
+                new ArrayList<>(), new HashMap<>(), result);
+        return result;
+    }
+
+    private static void generateAllSubsets(
+            List<Vertex> vertices,
+            int k,
+            int start,
+            List<Vertex> chosen,
+            Map<String, Integer> keyOccurrences,
+            Map<String, List<Integer>> result) {
+
+        if (chosen.size() == k) {
+            String labelKey = chosen.stream()
+                    .map(vertex -> Integer.toString(vertex.getLabel()))
+                    .collect(Collectors.joining(" "));
+            int occurrence = keyOccurrences.merge(labelKey, 1, Integer::sum);
+            String mapKey = occurrence == 1
+                    ? labelKey
+                    : labelKey + "#" + occurrence;
+            List<Integer> vertexIndices = chosen.stream()
+                    .map(Vertex::getIndex)
+                    .collect(Collectors.toList());
+            result.put(mapKey, vertexIndices);
+            return;
+        }
+
+        int stillNeeded = k - chosen.size();
+        for (int i = start; i <= vertices.size() - stillNeeded; i++) {
+            chosen.add(vertices.get(i));
+            generateAllSubsets(vertices, k, i + 1, chosen,
+                    keyOccurrences, result);
+            chosen.remove(chosen.size() - 1);
+        }
+    }
+
     private static void backtrack(
             List<Integer> labels,
             Map<Integer, List<Integer>> labelBuckets,

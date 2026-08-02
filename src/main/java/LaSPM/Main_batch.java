@@ -29,15 +29,20 @@ public class Main_batch {
         Settings.loadOverrides(System.getProperty("LaSPM.config"));
         configureAblationMode();
 
+        Map<String, int[]> configuredBatchSettings =
+                Settings.getBatchFrequencyOverrides();
         Map<String, int[]> batchSettings = new LinkedHashMap<>();
-        batchSettings.put("DBLP", new int[]{180000, 190000, 200000, 210000, 220000});
-        batchSettings.put("OpenAlex", new int[]{800, 1000, 1200, 1400, 1600});
-        batchSettings.put("AMiner", new int[]{200, 400, 600, 800, 1000});
-        batchSettings.put("Walmart", new int[]{5, 10, 15, 20, 25});
-        Settings.getBatchFrequencyOverrides().forEach(batchSettings::put);
+        if (configuredBatchSettings.isEmpty()) {
+            batchSettings.put("dblp_updated", new int[]{300000, 400000, 500000, 600000, 700000, 755913});
+            batchSettings.put("OpenAlex_sorted", new int[]{20000, 22000, 24000, 26000, 28000});
+            batchSettings.put("AMiner", new int[]{900, 1000, 1100, 1200, 1300});
+            batchSettings.put("walmart_updated", new int[]{14, 16, 18, 20, 22});
+        } else {
+            batchSettings.putAll(configuredBatchSettings);
+        }
 
         String baseOutputFolder = Settings.outputFolder;
-        File memorySummaryFile = memorySummaryFile();
+        File memorySummaryFile = memorySummaryFile(baseOutputFolder);
         System.out.println("Writing per-run memory summary to " + memorySummaryFile.getPath());
 
         boolean firstMiningRun = true;
@@ -83,7 +88,9 @@ public class Main_batch {
 
     private static String outputFolderFor(String baseOutputFolder, int rerun) {
         if (Settings.ablation) {
-            return "output/ablation/" + Settings.ablationMode + "/" + Settings.dataFile + "/" + "rerun" + rerun + "/";
+            return withTrailingSeparator(baseOutputFolder)
+                    + "ablation/" + Settings.ablationMode + "/"
+                    + Settings.dataFile + "/rerun" + rerun + "/";
         }
         return withTrailingSeparator(baseOutputFolder) + "rerun" + rerun + "/";
     }
@@ -107,6 +114,9 @@ public class Main_batch {
         } else if (Settings.disable_localNeighborhood) {
             Settings.ablationMode = "LocalNeighborhood";
             System.out.println("Disable local neighborhood");
+        } else if (Settings.disable_multiset) {
+            Settings.ablationMode = "Multiset";
+            System.out.println("Disable multiset optimization");
         } else {
             Settings.ablationMode = "Normal";
             System.out.println("Normal mode, all heuristics are enabled!");
@@ -226,11 +236,14 @@ public class Main_batch {
         fwP.close();
     }
 
-    private static File memorySummaryFile() {
+    private static File memorySummaryFile(String baseOutputFolder) {
         if (Settings.ablation) {
-            return new File("output/ablation/" + Settings.ablationMode, MEMORY_SUMMARY_FILE);
+            return new File(
+                    withTrailingSeparator(baseOutputFolder)
+                            + "ablation/" + Settings.ablationMode,
+                    MEMORY_SUMMARY_FILE);
         }
-        return new File(Settings.outputFolder, MEMORY_SUMMARY_FILE);
+        return new File(baseOutputFolder, MEMORY_SUMMARY_FILE);
     }
 
     private static void writeMemorySummary(File file, List<RunMetrics> datasetMetrics, boolean append) throws IOException {

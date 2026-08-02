@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+CALLER_DIR="$(pwd)"
+CONFIG_FILE="${CONFIG_FILE:-}"
+if [[ -n "${CONFIG_FILE}" && "${CONFIG_FILE}" != /* ]]; then
+  CONFIG_FILE="${CALLER_DIR}/${CONFIG_FILE}"
+fi
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+cd "${PROJECT_ROOT}"
+
 TIME_LIMIT="${TIME_LIMIT:-168h}"
 KILL_AFTER="${KILL_AFTER:-30s}"
 JAVA_HEAP="${JAVA_HEAP:-250G}"
 MEMORY_SAMPLE_MILLIS="${MEMORY_SAMPLE_MILLIS:-1000}"
-CONFIG_FILE="${CONFIG_FILE:-}"
+CONFIG_FILE="${CONFIG_FILE:-config/laspm.properties}"
 
 MAVEN_ARGS=(exec:java -Dexec.mainClass="LaSPM.Main_batch")
 if [[ -n "${CONFIG_FILE}" ]]; then
@@ -44,7 +54,7 @@ else
 fi
 
 echo "Memory summary is written by Main_batch to:"
-echo "  output/batch_memory_summary.csv"
-echo "  output/ablation/<mode>/batch_memory_summary.csv when Settings.ablation=true"
+echo "  <outputFolder>/batch_memory_summary.csv"
+echo "  <outputFolder>/ablation/<mode>/batch_memory_summary.csv when Settings.ablation=true"
 
 exit "${status}"

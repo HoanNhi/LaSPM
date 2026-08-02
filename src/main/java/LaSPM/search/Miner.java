@@ -12,6 +12,32 @@ import static LaSPM.utils.Utils.computeKeyMNI;
 
 public class Miner {
 
+    /**
+     * Keeps the original unique-multiset behavior unless the multiset
+     * optimization is disabled. In that ablation mode, all vertex-level subsets
+     * sharing the same canonical label key are retained in the value list.
+     */
+    private static Map<String, List<List<Integer>>> generateSubsetGroups(
+            Set<Vertex> vertices,
+            int subsetSize) {
+
+        Map<String, List<Integer>> subsets = Settings.disable_multiset
+                ? Utils.generateAllSubsetMap(vertices, subsetSize)
+                : Utils.generateMultisetMap(vertices, subsetSize);
+
+        Map<String, List<List<Integer>>> grouped = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Integer>> entry : subsets.entrySet()) {
+            String key = entry.getKey();
+            int occurrenceSeparator = key.lastIndexOf('#');
+            String labelKey = occurrenceSeparator < 0
+                    ? key
+                    : key.substring(0, occurrenceSeparator);
+            grouped.computeIfAbsent(labelKey, ignored -> new ArrayList<>())
+                    .add(entry.getValue());
+        }
+        return grouped;
+    }
+
     private int incrId; // simplets generated
     private Map<String, HashMap<String, List<LSimplet>>> examined;
     private Set<LSimplet> examinedAblation;
@@ -95,7 +121,8 @@ public class Miner {
 
                 Set<List<Integer>> combinationOfExtVertices = combinationsOfExtVertices.get(dim);
 
-                Map<String, List<Integer>> combinationsOfSimplexVertices = Utils.generateMultisetMap(s.getVertices(), dim);
+                Map<String, List<List<Integer>>> combinationsOfSimplexVertices =
+                        generateSubsetGroups(s.getVertices(), dim);
                 for (List<Integer> ExtVertices: combinationOfExtVertices) {
 
                     Set<Vertex> extVertices = new HashSet<>();
@@ -103,7 +130,9 @@ public class Miner {
                         extVertices.add(pattern.getVertex(extV));
                     }
                     String mniKey = computeKeyMNI(extVertices);
-                    if (!combinationsOfSimplexVertices.containsKey(mniKey)) {
+                    List<List<Integer>> matchingSimplexSubsets =
+                            combinationsOfSimplexVertices.get(mniKey);
+                    if (matchingSimplexSubsets == null) {
                         continue;
                     }
 
@@ -116,7 +145,7 @@ public class Miner {
                     if (pattern.checkIfSimplexExists(temporaryCheckVertexExt.toString()))
                         continue;
 
-                    List<Integer> SimplexVertices = combinationsOfSimplexVertices.get(mniKey);
+                    for (List<Integer> SimplexVertices : matchingSimplexSubsets) {
 
                     // Result: (patternVertexIndex, simplexVertexIndex)
                     Set<Pair<Integer, Integer>> matching = new HashSet<>();
@@ -148,10 +177,10 @@ public class Miner {
                     ext.addEdge(matching, sCopy);
                     totalGen++;
                     if (!hasBeenExamined(ext)){
+                        ext.computeImageIfAbsent(pattern.getImages(), supMaps, sCopy, minFreq);
+                        if (ext.getFreq() == -1)
+                            continue;
                         if (!Settings.disable_decomposition){
-                            ext.computeImageIfAbsent(pattern.getImages(), supMaps, sCopy, minFreq);
-                            if (ext.getFreq() == -1)
-                                continue;
 //                            //Do simplet decomposition: Iteratively try to remove an individual simplex from the simplet
 //                            // and check if there exists any smaller simplet isomorphic to the new simplet. If there is,
 //                            // then we can directly use the image of the smaller simplet to compute the image of the new simplet,
@@ -195,6 +224,7 @@ public class Miner {
                         }
                         incrId++;
                     }
+                    }
                 }
             }
         }
@@ -228,15 +258,20 @@ public class Miner {
                         (pattern.getVertices().size() + s.getVertices().size() - dim > maxSize))
                     continue;
 
-                Map<String, List<Integer>> combinationsOfExtVertices = Utils.generateMultisetMap(pattern.getVertices(), dim);
-                Map<String, List<Integer>> combinationsOfSimplexVertices = Utils.generateMultisetMap(s.getVertices(), dim);
+                Map<String, List<List<Integer>>> combinationsOfExtVertices =
+                        generateSubsetGroups(pattern.getVertices(), dim);
+                Map<String, List<List<Integer>>> combinationsOfSimplexVertices =
+                        generateSubsetGroups(s.getVertices(), dim);
 
-                for (Map.Entry<String, List<Integer>> combination: combinationsOfExtVertices.entrySet()) {
-                    if (!combinationsOfSimplexVertices.containsKey(combination.getKey()))
+                for (Map.Entry<String, List<List<Integer>>> combination:
+                        combinationsOfExtVertices.entrySet()) {
+                    List<List<Integer>> matchingSimplexSubsets =
+                            combinationsOfSimplexVertices.get(combination.getKey());
+                    if (matchingSimplexSubsets == null)
                         continue;
                     else{
-                        List<Integer> ExtVertices = combination.getValue();
-                        List<Integer> SimplexVertices = combinationsOfSimplexVertices.get(combination.getKey());
+                        for (List<Integer> ExtVertices : combination.getValue()) {
+                        for (List<Integer> SimplexVertices : matchingSimplexSubsets) {
                         List<Integer> temporaryCheckVertexExt = new ArrayList<>(ExtVertices);
                         Collections.sort(temporaryCheckVertexExt);
                         int maxVIDs = pattern.getVertices().size();
@@ -269,6 +304,8 @@ public class Miner {
                                 throw e;
                             }
                             incrId++;
+                        }
+                        }
                         }
                     }
                 }
